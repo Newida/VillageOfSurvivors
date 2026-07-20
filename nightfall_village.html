@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#35262a">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <title>Nightfall Village</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="page">
+    <main class="app">
+      <section class="game-shell" aria-label="Nightfall Village game">
+        <div class="statusbar">
+          <div class="phase-card">
+            <span id="phaseGlyph" class="phase-glyph">DAY</span>
+            <span>
+              <span class="status-kicker">Day <strong id="dayLabel">1</strong></span>
+              <strong id="phaseLabel" class="phase-title">Golden morning</strong>
+            </span>
+          </div>
+
+          <div class="timeline-card">
+            <div class="timeline-top">
+              <span id="timePrompt">Until dusk</span>
+              <strong><span id="timeLabel">45.0</span>s</strong>
+            </div>
+            <div class="time-track" aria-hidden="true">
+              <div id="timeFill" class="time-fill"></div>
+            </div>
+            <div class="nightfall-row" aria-label="Demon tribute schedule">
+              <span id="tributeStatus" class="tribute-status">Demon tribute in 6 days</span>
+            </div>
+          </div>
+
+          <div class="vitals">
+            <div class="vital-row">
+              <span class="vital-icon">HP</span>
+              <div class="meter" aria-hidden="true"><div id="hpFill" class="meter-fill hp-fill"></div></div>
+              <span id="hpLabel" class="vital-value">100/100</span>
+            </div>
+            <div class="vital-row">
+              <span class="vital-icon">BAG</span>
+              <div class="meter" aria-hidden="true"><div id="bagFill" class="meter-fill bag-fill"></div></div>
+              <span id="bagLabel" class="vital-value">0/8</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="world-actions" aria-label="Game options">
+          <button id="soundButton" class="small-button" type="button" aria-pressed="false">Sound: off</button>
+          <button id="pauseButton" class="small-button" type="button">Pause</button>
+        </div>
+
+        <div id="multiplayerStatus" class="multiplayer-status" aria-live="polite" hidden>
+          <span id="multiplayerStatusText"></span>
+          <button id="copyInviteButton" class="small-button" type="button">Invite</button>
+        </div>
+
+        <aside id="upgradeTracker" class="upgrade-tracker" aria-label="Tracked upgrades" hidden></aside>
+
+        <div class="canvas-wrap">
+          <canvas id="game" width="480" height="320" aria-label="Top-down pixel-art woodland and village"></canvas>
+          <div id="message" class="message" aria-live="polite"></div>
+          <div id="contextHint" class="context-hint">
+            <span class="keycap">E</span>
+            <span id="contextText">Gather</span>
+          </div>
+
+          <div class="controls" aria-label="Touch controls">
+            <div class="dpad">
+              <button class="touch up" data-key="ArrowUp" type="button" aria-label="Move up">▲</button>
+              <button class="touch left" data-key="ArrowLeft" type="button" aria-label="Move left">◀</button>
+              <button class="touch down" data-key="ArrowDown" type="button" aria-label="Move down">▼</button>
+              <button class="touch right" data-key="ArrowRight" type="button" aria-label="Move right">▶</button>
+            </div>
+            <div class="actions">
+              <button class="touch" data-key="KeyE" type="button">Gather</button>
+              <button class="touch" data-key="Space" type="button">Swing</button>
+            </div>
+          </div>
+
+          <section id="upgradeMenu" class="house-menu" role="dialog" aria-modal="true" aria-labelledby="upgradeMenuTitle" hidden>
+            <div class="house-menu-card">
+              <div class="panel-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="upgradeMenuTitle">Workshop upgrades</h2>
+                  <p>The first village house improves your tools and gear.</p>
+                </div>
+                <button class="menu-close" data-close-menu type="button" aria-label="Leave workshop">×</button>
+              </div>
+              <div class="panel-body">
+                <div id="upgradeList" class="upgrade-list"></div>
+              </div>
+              <div class="utility-row">
+                <p class="save-note">Your progress stays in this browser.</p>
+                <button id="resetButton" class="reset-button" type="button">Reset save</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="storageMenu" class="house-menu" role="dialog" aria-modal="true" aria-labelledby="storageMenuTitle" hidden>
+            <div class="house-menu-card">
+              <div class="panel-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="storageMenuTitle">Village storage</h2>
+                  <p>The second village house keeps everything you have brought home.</p>
+                </div>
+                <button class="menu-close" data-close-menu type="button" aria-label="Leave storage">×</button>
+              </div>
+              <div class="panel-body">
+                <p class="intro">Materials are deposited automatically when you return to the village.</p>
+                <div class="bank-grid">
+                  <div class="bank-chip">
+                    <span class="mini-sprite wood" aria-hidden="true"></span>
+                    <span class="bank-label">Wood</span>
+                    <strong id="woodBank" class="bank-value">0</strong>
+                  </div>
+                  <div class="bank-chip">
+                    <span class="mini-sprite stone" aria-hidden="true"></span>
+                    <span class="bank-label">Stone</span>
+                    <strong id="stoneBank" class="bank-value">0</strong>
+                  </div>
+                  <div class="bank-chip">
+                    <span class="mini-sprite crystal" aria-hidden="true"></span>
+                    <span class="bank-label">Crystal</span>
+                    <strong id="crystalBank" class="bank-value">0</strong>
+                  </div>
+                  <div class="bank-chip">
+                    <span class="mini-sprite hide" aria-hidden="true"></span>
+                    <span class="bank-label">Hides</span>
+                    <strong id="hideBank" class="bank-value">0</strong>
+                  </div>
+                </div>
+                <div class="boss-strip">
+                  <span>Stored materials</span>
+                  <strong id="storageTotal">0</strong>
+                </div>
+                <div class="boss-strip">
+                  <span>Demon cores</span>
+                  <strong id="demonCores">0</strong>
+                </div>
+                <p class="intro core-note">Each Demon Core grants +5 maximum HP and +2 swing damage.</p>
+                <div class="tribute-ledger">
+                  <div class="tribute-ledger-title">
+                    <span>Next tribute</span>
+                    <strong id="tributeStorageStatus">Due on day 7</strong>
+                  </div>
+                  <div id="tributeStorageCost" class="cost-row"></div>
+                  <p>Pay from your stored materials, or refuse and face the Demon God.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="villageMenu" class="house-menu" role="dialog" aria-modal="true" aria-labelledby="villageMenuTitle" hidden>
+            <div class="house-menu-card">
+              <div class="panel-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="villageMenuTitle">Village hall</h2>
+                  <p>Grow a village that can gather, travel, and store more on its own.</p>
+                </div>
+                <button class="menu-close" data-close-menu type="button" aria-label="Leave village hall">×</button>
+              </div>
+              <div class="panel-body">
+                <div id="villageUpgradeList" class="upgrade-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="pauseMenu" class="house-menu pause-menu" role="dialog" aria-modal="true" aria-labelledby="pauseMenuTitle" hidden>
+            <div class="house-menu-card pause-menu-card">
+              <div class="panel-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="pauseMenuTitle">Game paused</h2>
+                  <p>The village will wait for you.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="control-grid">
+                  <div class="control-item"><strong>Move</strong>WASD or arrow keys</div>
+                  <div class="control-item"><strong>Gather</strong>E near a resource</div>
+                  <div class="control-item"><strong>Defend</strong>Space to swing</div>
+                  <div class="control-item"><strong>Pause</strong>Esc or P</div>
+                </div>
+                <div class="pause-actions">
+                  <button id="resumeButton" class="pause-action resume" type="button">Resume</button>
+                  <button id="pauseSoundButton" class="pause-action sound" type="button" aria-pressed="false">Sound: off</button>
+                  <button id="pauseResetButton" class="pause-action reset" type="button">Reset game</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="lobbyMenu" class="house-menu lobby-menu" role="dialog" aria-modal="true" aria-labelledby="lobbyMenuTitle" hidden>
+            <div class="house-menu-card lobby-menu-card">
+              <div class="panel-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="lobbyMenuTitle">Village lobby</h2>
+                  <p>Gather your party before the first dawn.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <p id="lobbyRoomLabel" class="lobby-room">Room</p>
+                <p id="lobbyStatusText" class="intro">Connecting to the host…</p>
+                <div id="lobbyPlayerList" class="lobby-player-list" aria-live="polite"></div>
+                <button id="lobbyStartButton" class="pause-action resume lobby-start" type="button" disabled>Start game</button>
+                <p class="intro lobby-note">Only the host can start the session. Up to four villagers can join.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="tributeMenu" class="house-menu event-menu" role="dialog" aria-modal="true" aria-labelledby="tributeMenuTitle" hidden>
+            <div class="house-menu-card">
+              <div class="panel-heading demon-heading">
+                <div class="menu-heading-copy">
+                  <h2 id="tributeMenuTitle">The Demon God Demands Tribute</h2>
+                  <p id="tributeCycleLabel">The first seven days have passed.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <p class="tribute-copy">The village has reached the deadline. Pay from the storehouse, or refuse and survive the Demon God’s wrath.</p>
+                <div class="tribute-cost-box">
+                  <strong>Required tribute</strong>
+                  <div id="tributeMenuCost" class="cost-row"></div>
+                </div>
+                <div class="tribute-actions">
+                  <button id="payTributeButton" class="tribute-button pay" type="button">Pay tribute</button>
+                  <button id="refuseTributeButton" class="tribute-button refuse" type="button">Refuse and fight</button>
+                </div>
+                <p id="tributeMenuNote" class="tribute-note">A victory keeps your materials and earns a Demon Core. A loss ends this village.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="gameOverMenu" class="house-menu event-menu" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" hidden>
+            <div class="house-menu-card game-over-card">
+              <div class="panel-body">
+                <h2 id="gameOverTitle">The Demon God Prevails</h2>
+                <p>The village falls beneath the tribute it refused. Begin again to rebuild your village.</p>
+                <button id="newVillageButton" class="tribute-button" type="button">Begin a new village</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/game-config.js" defer></script>
+  <script src="assets/game.js" defer></script>
+</body>
+</html>
