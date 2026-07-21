@@ -14,8 +14,8 @@
     "desktop:dev": "electron . --dev",
     "test": "node --test tools/tests/server.test.js",
     "build": "npm run build:linux",
-    "build:linux": "electron-builder --linux AppImage --x64",
-    "build:windows": "electron-builder --win portable --x64",
+    "build:linux": "electron-builder --linux AppImage --x64 --publish never",
+    "build:windows": "electron-builder --win portable --x64 --publish never",
     "package:dir": "electron-builder --dir"
   },
   "engines": {
