@@ -11,6 +11,8 @@ const DEFAULT_PORT = 3000;
 const ROOT = __dirname;
 const ASSET_ROOT = path.join(ROOT, "assets");
 const MAX_PLAYERS = 4;
+const DAY_LENGTH = 45;
+const NIGHT_LENGTH = 18;
 const DEFAULT_ROOM = createRoomCode();
 const rooms = new Map();
 const MIME_TYPES = {
@@ -47,6 +49,7 @@ function getRoom(code) {
       code: safeCode,
       players: new Map(),
       villageState: null,
+      clockState: null,
       hostId: null,
       started: false
     });
@@ -60,14 +63,30 @@ function safeNumber(value, fallback, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, number));
 }
 
-function sanitizePlayerState(state) {
+function sanitizePlayerName(value, fallback) {
+  const name = String(value || "")
+    .replace(/[<>\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 24);
+  return name || fallback || "Villager";
+}
+
+function sanitizePlayerState(state, fallbackState) {
   const source = state || {};
+  const fallback = fallbackState || {};
+  const maximumHealth = Math.floor(safeNumber(source.maxHp, fallback.maxHp || 100, 1, 9999));
+  const maximumBag = Math.floor(safeNumber(source.bagCapacity, fallback.bagCapacity || 8, 1, 9999));
   return {
-    x: safeNumber(source.x, 720, 7, 1433),
-    y: safeNumber(source.y, 495, 7, 953),
-    facingX: safeNumber(source.facingX, 0, -1, 1),
-    facingY: safeNumber(source.facingY, 1, -1, 1),
-    hp: safeNumber(source.hp, 100, 0, 9999)
+    name: sanitizePlayerName(source.name, fallback.name),
+    x: safeNumber(source.x, fallback.x || 720, 7, 1433),
+    y: safeNumber(source.y, fallback.y || 495, 7, 953),
+    facingX: safeNumber(source.facingX, fallback.facingX || 0, -1, 1),
+    facingY: safeNumber(source.facingY, fallback.facingY || 1, -1, 1),
+    hp: safeNumber(source.hp, fallback.hp === undefined ? maximumHealth : fallback.hp, 0, maximumHealth),
+    maxHp: maximumHealth,
+    bagAmount: Math.floor(safeNumber(source.bagAmount, fallback.bagAmount || 0, 0, maximumBag)),
+    bagCapacity: maximumBag
   };
 }
 
@@ -103,6 +122,19 @@ function sanitizeVillageState(state) {
   };
 }
 
+function sanitizeClockState(state, fallbackDay) {
+  const source = state || {};
+  const phase = source.phase === "night" ? "night" : "day";
+  const phaseLength = phase === "night" ? NIGHT_LENGTH : DAY_LENGTH;
+  return {
+    day: Math.floor(safeNumber(source.day, fallbackDay || 1, 1, 100000)),
+    phase: phase,
+    phaseTime: safeNumber(source.phaseTime, phaseLength, 0, phaseLength),
+    running: Boolean(source.running),
+    demonFightActive: phase === "night" && Boolean(source.demonFightActive)
+  };
+}
+
 function publicPlayer(player) {
   return { id: player.id, state: player.state };
 }
@@ -128,10 +160,11 @@ function removePlayer(socket) {
   if (room.hostId === session.playerId) {
     const nextHost = room.players.values().next().value;
     room.hostId = nextHost ? nextHost.id : null;
-    broadcast(room, { type: "host:changed", hostId: room.hostId });
+    broadcast(room, { type: "host:changed", hostId: room.hostId, clockState: room.clockState });
   }
   if (room.players.size === 0) {
     room.villageState = null;
+    room.clockState = null;
     room.hostId = null;
     room.started = false;
     if (room.code !== DEFAULT_ROOM) rooms.delete(room.code);
@@ -159,9 +192,14 @@ function handleMessage(socket, rawMessage) {
     const player = {
       id: crypto.randomUUID(),
       socket: socket,
-      state: sanitizePlayerState(message.player)
+      state: sanitizePlayerState(message.player, { name: "Villager " + (room.players.size + 1) })
     };
     if (!room.villageState) room.villageState = sanitizeVillageState(message.villageState);
+    if (!room.clockState) {
+      room.clockState = sanitizeClockState(message.clockState, room.villageState.day);
+      room.clockState.running = false;
+      room.villageState.day = room.clockState.day;
+    }
     room.players.set(player.id, player);
     if (!room.hostId) room.hostId = player.id;
     socket.session = { roomCode: room.code, playerId: player.id };
@@ -172,6 +210,7 @@ function handleMessage(socket, rawMessage) {
       hostId: room.hostId,
       started: room.started,
       villageState: room.villageState,
+      clockState: room.clockState,
       players: Array.from(room.players.values()).map(publicPlayer)
     });
     broadcast(room, {
@@ -189,18 +228,28 @@ function handleMessage(socket, rawMessage) {
   if (!room || !player) return;
 
   if (message.type === "player:update") {
-    player.state = sanitizePlayerState(message.player);
+    player.state = sanitizePlayerState(message.player, player.state);
     broadcast(room, { type: "player:update", id: player.id, player: player.state }, socket);
   } else if (message.type === "village:sync") {
     room.villageState = sanitizeVillageState(message.villageState);
+    if (room.clockState) room.villageState.day = room.clockState.day;
     broadcast(room, { type: "village:state", villageState: room.villageState }, socket);
+  } else if (message.type === "clock:sync") {
+    if (player.id !== room.hostId) {
+      send(socket, { type: "error", message: "Only the host can synchronize the day and night cycle." });
+      return;
+    }
+    room.clockState = sanitizeClockState(message.clockState, room.villageState.day);
+    if (!room.started) room.clockState.running = false;
+    room.villageState.day = room.clockState.day;
+    broadcast(room, { type: "clock:state", clockState: room.clockState }, socket);
   } else if (message.type === "start:game") {
     if (player.id !== room.hostId) {
       send(socket, { type: "error", message: "Only the host can start this game." });
       return;
     }
     room.started = true;
-    broadcast(room, { type: "game:started", hostId: room.hostId });
+    broadcast(room, { type: "game:started", hostId: room.hostId, clockState: room.clockState });
   }
 }
 

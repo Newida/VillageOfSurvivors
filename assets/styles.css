@@ -1444,6 +1444,34 @@
       text-transform: uppercase;
     }
 
+    .lobby-name-label {
+      display: grid;
+      gap: 5px;
+      color: #76504a;
+      font-size: 8px;
+      font-weight: 1000;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .lobby-name-input {
+      width: 100%;
+      padding: 8px 9px;
+      border: 2px solid #8b6047;
+      border-radius: 4px;
+      outline: none;
+      background: #fff1c9;
+      box-shadow: inset 0 2px rgba(91, 56, 45, 0.12);
+      color: #4a322f;
+      font: 1000 10px ui-monospace, monospace;
+      text-transform: none;
+    }
+
+    .lobby-name-input:focus {
+      border-color: #c46e52;
+      box-shadow: 0 0 0 2px rgba(196, 110, 82, 0.2);
+    }
+
     .lobby-player-list {
       display: grid;
       gap: 5px;
@@ -1477,6 +1505,236 @@
     .lobby-note {
       margin-top: 10px;
       text-align: center;
+    }
+
+    .player-scoreboard[hidden] {
+      display: none;
+    }
+
+    .player-scoreboard {
+      position: absolute;
+      z-index: 9;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background: rgba(22, 17, 25, 0.54);
+      pointer-events: none;
+    }
+
+    .scoreboard-panel {
+      width: min(760px, 100%);
+      overflow: hidden;
+      border: 3px solid #372a35;
+      border-radius: 7px;
+      background: rgba(45, 34, 45, 0.97);
+      box-shadow: 0 7px 0 rgba(22, 15, 22, 0.92), 0 18px 48px rgba(10, 7, 11, 0.46);
+      color: #fff0bd;
+    }
+
+    .scoreboard-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px 11px;
+      border-bottom: 2px solid #765565;
+      background: linear-gradient(180deg, #5a3c4d, #483442);
+    }
+
+    .scoreboard-kicker {
+      display: block;
+      margin-bottom: 3px;
+      color: #d8ad7c;
+      font-size: 7px;
+      font-weight: 1000;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .scoreboard-heading h2 {
+      margin: 0;
+      color: #fff1c1;
+      font: 1000 18px Georgia, serif;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .scoreboard-count {
+      padding: 6px 8px;
+      border: 2px solid #c29262;
+      border-radius: 4px;
+      background: #332733;
+      color: #ffe1a0;
+      font-size: 10px;
+    }
+
+    .scoreboard-labels,
+    .scoreboard-player {
+      display: grid;
+      grid-template-columns: minmax(170px, 1fr) minmax(125px, 0.58fr) minmax(115px, 0.48fr);
+      align-items: center;
+      gap: 14px;
+    }
+
+    .scoreboard-labels {
+      padding: 7px 14px;
+      border-bottom: 1px solid #66505f;
+      color: #b99484;
+      font-size: 7px;
+      font-weight: 1000;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .scoreboard-player-list {
+      display: grid;
+    }
+
+    .scoreboard-player {
+      min-height: 58px;
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(159, 119, 128, 0.34);
+      background: rgba(255, 244, 207, 0.035);
+    }
+
+    .scoreboard-player.self {
+      background: rgba(215, 182, 106, 0.13);
+      box-shadow: inset 3px 0 #d7b66a;
+    }
+
+    .scoreboard-player:last-child {
+      border-bottom: 0;
+    }
+
+    .scoreboard-player-identity {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 10px;
+    }
+
+    .scoreboard-avatar {
+      --avatar-tunic: #6f9a78;
+      position: relative;
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      overflow: hidden;
+      border: 2px solid #c69568;
+      border-radius: 4px;
+      background: #263b3c;
+      box-shadow: inset 0 -5px rgba(16, 25, 27, 0.35);
+    }
+
+    .scoreboard-avatar::before {
+      content: "";
+      position: absolute;
+      z-index: 2;
+      top: 6px;
+      left: 11px;
+      width: 10px;
+      height: 10px;
+      background: #d6a47c;
+      box-shadow: 0 -3px #62443b, 2px 4px #d6a47c, -2px 4px #d6a47c;
+    }
+
+    .scoreboard-avatar::after {
+      content: "";
+      position: absolute;
+      bottom: 2px;
+      left: 7px;
+      width: 20px;
+      height: 13px;
+      background: var(--avatar-tunic);
+      box-shadow: -3px 5px #493731, 3px 5px #493731;
+    }
+
+    .scoreboard-avatar.tone-0 { --avatar-tunic: #bf6552; }
+    .scoreboard-avatar.tone-1 { --avatar-tunic: #5d88a7; }
+    .scoreboard-avatar.tone-2 { --avatar-tunic: #78a070; }
+    .scoreboard-avatar.tone-3 { --avatar-tunic: #a06f91; }
+
+    .scoreboard-player-copy {
+      min-width: 0;
+    }
+
+    .scoreboard-player-name {
+      display: block;
+      overflow: hidden;
+      color: #fff3cb;
+      font-size: 11px;
+      font-weight: 1000;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scoreboard-badges {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .scoreboard-badge {
+      padding: 2px 4px;
+      border-radius: 2px;
+      background: #725160;
+      color: #f3d7a9;
+      font-size: 6px;
+      font-weight: 1000;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .scoreboard-badge.you {
+      background: #a85f4e;
+      color: #fff2c9;
+    }
+
+    .scoreboard-stat {
+      min-width: 0;
+    }
+
+    .scoreboard-stat-value {
+      display: flex;
+      justify-content: space-between;
+      gap: 5px;
+      margin-bottom: 5px;
+      color: #e7cfae;
+      font-size: 8px;
+      font-weight: 1000;
+    }
+
+    .scoreboard-meter {
+      height: 7px;
+      overflow: hidden;
+      border: 1px solid #211a22;
+      border-radius: 2px;
+      background: #201920;
+    }
+
+    .scoreboard-meter-fill {
+      display: block;
+      height: 100%;
+      background: #c96259;
+    }
+
+    .scoreboard-meter-fill.bag {
+      background: #d3a653;
+    }
+
+    .scoreboard-hint {
+      margin: 0;
+      padding: 9px 14px 11px;
+      border-top: 2px solid #765565;
+      color: #bfa9a0;
+      font-size: 8px;
+      text-align: center;
+    }
+
+    .scoreboard-hint .keycap {
+      margin: 0 3px;
+      color: #fff0bd;
     }
 
     .pause-actions {
@@ -1714,5 +1972,83 @@
 
       .pause-actions {
         grid-template-columns: 1fr;
+      }
+
+      .player-scoreboard {
+        padding: 10px;
+      }
+
+      .scoreboard-labels,
+      .scoreboard-player {
+        grid-template-columns: minmax(120px, 1fr) minmax(82px, 0.62fr) minmax(72px, 0.5fr);
+        gap: 8px;
+      }
+
+      .scoreboard-player {
+        padding-inline: 9px;
+      }
+
+      .scoreboard-labels {
+        padding-inline: 9px;
+      }
+
+      .scoreboard-avatar {
+        width: 30px;
+        height: 30px;
+      }
+
+      .scoreboard-avatar::before {
+        left: 9px;
+      }
+
+      .scoreboard-avatar::after {
+        left: 5px;
+      }
+
+      .scoreboard-player-name {
+        font-size: 9px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .scoreboard-heading {
+        padding: 10px;
+      }
+
+      .scoreboard-labels,
+      .scoreboard-player {
+        grid-template-columns: minmax(96px, 1fr) 68px 62px;
+        gap: 5px;
+      }
+
+      .scoreboard-player {
+        min-height: 50px;
+        padding: 6px;
+      }
+
+      .scoreboard-labels {
+        padding-inline: 6px;
+      }
+
+      .scoreboard-player-identity {
+        gap: 6px;
+      }
+
+      .scoreboard-avatar {
+        width: 26px;
+        height: 28px;
+      }
+
+      .scoreboard-avatar::before {
+        top: 5px;
+        left: 7px;
+      }
+
+      .scoreboard-avatar::after {
+        left: 3px;
+      }
+
+      .scoreboard-stat-value {
+        font-size: 7px;
       }
     }

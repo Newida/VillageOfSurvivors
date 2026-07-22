@@ -81,6 +81,25 @@
             </div>
           </div>
 
+          <section id="playerScoreboard" class="player-scoreboard" aria-label="Multiplayer scoreboard" hidden>
+            <div class="scoreboard-panel">
+              <header class="scoreboard-heading">
+                <div>
+                  <span class="scoreboard-kicker">Village party</span>
+                  <h2>Players</h2>
+                </div>
+                <strong id="scoreboardPlayerCount" class="scoreboard-count">1 / 4</strong>
+              </header>
+              <div class="scoreboard-labels" aria-hidden="true">
+                <span>Player</span>
+                <span>Health</span>
+                <span>Bag</span>
+              </div>
+              <div id="scoreboardPlayerList" class="scoreboard-player-list"></div>
+              <p class="scoreboard-hint">Release <span class="keycap">Tab</span> to close</p>
+            </div>
+          </section>
+
           <section id="upgradeMenu" class="house-menu" role="dialog" aria-modal="true" aria-labelledby="upgradeMenuTitle" hidden>
             <div class="house-menu-card">
               <div class="panel-heading">
@@ -182,6 +201,7 @@
                   <div class="control-item"><strong>Move</strong>WASD or arrow keys</div>
                   <div class="control-item"><strong>Gather</strong>E near a resource</div>
                   <div class="control-item"><strong>Defend</strong>Space to swing</div>
+                  <div class="control-item"><strong>Party</strong>Hold Tab for players</div>
                   <div class="control-item"><strong>Pause</strong>Esc or P</div>
                 </div>
                 <div class="pause-actions">
@@ -204,6 +224,10 @@
               <div class="panel-body">
                 <p id="lobbyRoomLabel" class="lobby-room">Room</p>
                 <p id="lobbyStatusText" class="intro">Connecting to the host…</p>
+                <label class="lobby-name-label" for="playerNameInput">
+                  Player name
+                  <input id="playerNameInput" class="lobby-name-input" type="text" maxlength="24" autocomplete="nickname" spellcheck="false">
+                </label>
                 <div id="lobbyPlayerList" class="lobby-player-list" aria-live="polite"></div>
                 <button id="lobbyStartButton" class="pause-action resume lobby-start" type="button" disabled>Start game</button>
                 <p class="intro lobby-note">Only the host can start the session. Up to four villagers can join.</p>

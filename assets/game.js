@@ -43,6 +43,10 @@
       lobbyStatusText: document.getElementById("lobbyStatusText"),
       lobbyPlayerList: document.getElementById("lobbyPlayerList"),
       lobbyStartButton: document.getElementById("lobbyStartButton"),
+      playerNameInput: document.getElementById("playerNameInput"),
+      playerScoreboard: document.getElementById("playerScoreboard"),
+      scoreboardPlayerCount: document.getElementById("scoreboardPlayerCount"),
+      scoreboardPlayerList: document.getElementById("scoreboardPlayerList"),
       resumeButton: document.getElementById("resumeButton"),
       pauseSoundButton: document.getElementById("pauseSoundButton"),
       pauseResetButton: document.getElementById("pauseResetButton"),
@@ -65,6 +69,29 @@
 
     const VIEW = { width: canvas.width, height: canvas.height };
     const { WORLD, VILLAGE, HOUSES, DAY_LENGTH, NIGHT_LENGTH, SAVE_KEY, REDUCE_MOTION, resourceDefs, upgradeDefs, villageUpgradeDefs } = window.NightfallConfig;
+    const PLAYER_NAME_KEY = SAVE_KEY + "-player-name";
+
+    function sanitizePlayerName(value) {
+      return String(value || "")
+        .replace(/[<>\u0000-\u001f\u007f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 24);
+    }
+
+    function loadPlayerName() {
+      const savedName = sanitizePlayerName(localStorage.getItem(PLAYER_NAME_KEY));
+      if (savedName) return savedName;
+      const generatedName = "Villager " + String(Math.floor(1000 + Math.random() * 9000));
+      localStorage.setItem(PLAYER_NAME_KEY, generatedName);
+      return generatedName;
+    }
+
+    function escapeMarkup(value) {
+      return String(value).replace(/[&<>"']/g, function(character) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
+      });
+    }
 
     function defaultProgress() {
       return {
@@ -134,7 +161,10 @@
     let houseExitRequired = null;
     let pauseMenuOpen = false;
     let lobbyOpen = false;
+    let scoreboardOpen = false;
+    let scoreboardRenderKey = "";
     let workers = [];
+    let playerName = loadPlayerName();
 
     const player = {
       x: VILLAGE.x,
@@ -155,6 +185,8 @@
       started: false,
       players: new Map(),
       playerUpdateTimer: 0,
+      clockSyncTimer: 0,
+      clockRunning: false,
       villageSyncTimer: null,
       connected: false,
       connecting: false
@@ -173,14 +205,108 @@
       };
     }
 
+    function isClockAuthority() {
+      return !multiplayer.connected || multiplayer.playerId === multiplayer.hostId;
+    }
+
+    function sharedClockSnapshot() {
+      return {
+        day: progress.day,
+        phase: phase,
+        phaseTime: phaseTime,
+        running: !paused && !demonFightActive && (!multiplayer.connected || multiplayer.started),
+        demonFightActive: demonFightActive
+      };
+    }
+
     function localPlayerSnapshot() {
       return {
+        name: playerName,
         x: player.x,
         y: player.y,
         facingX: player.facingX,
         facingY: player.facingY,
-        hp: player.hp
+        hp: player.hp,
+        maxHp: maxHp(),
+        bagAmount: totalHeld(),
+        bagCapacity: bagCapacity()
       };
+    }
+
+    function multiplayerPlayerEntries() {
+      const localId = multiplayer.playerId || "local-player";
+      return [{ id: localId, self: true, state: localPlayerSnapshot() }].concat(
+        Array.from(multiplayer.players.entries()).map(function(entry) {
+          return { id: entry[0], self: false, state: entry[1] || {} };
+        })
+      );
+    }
+
+    function playerIconTone(id, self) {
+      if (self) return 0;
+      return Array.from(String(id)).reduce(function(total, character) {
+        return total + character.charCodeAt(0);
+      }, 0) % 4;
+    }
+
+    function renderScoreboard(force) {
+      if (!scoreboardOpen) return;
+      const entries = multiplayerPlayerEntries();
+      const renderKey = JSON.stringify({ hostId: multiplayer.hostId, entries: entries });
+      if (!force && renderKey === scoreboardRenderKey) return;
+      scoreboardRenderKey = renderKey;
+      ui.scoreboardPlayerCount.textContent = entries.length + " / 4";
+      ui.scoreboardPlayerList.innerHTML = entries.map(function(entry) {
+        const state = entry.state || {};
+        const name = sanitizePlayerName(state.name) || "Villager";
+        const healthMax = Math.max(1, Math.floor(Number(state.maxHp) || 100));
+        const health = clamp(Math.ceil(Number(state.hp) || 0), 0, healthMax);
+        const capacity = Math.max(1, Math.floor(Number(state.bagCapacity) || 8));
+        const carried = clamp(Math.floor(Number(state.bagAmount) || 0), 0, capacity);
+        const healthWidth = clamp(health / healthMax * 100, 0, 100);
+        const bagWidth = clamp(carried / capacity * 100, 0, 100);
+        const badges = (entry.self ? '<span class="scoreboard-badge you">You</span>' : "") +
+          (entry.id === multiplayer.hostId ? '<span class="scoreboard-badge">Host</span>' : "");
+        return '<div class="scoreboard-player' + (entry.self ? " self" : "") + '">' +
+          '<div class="scoreboard-player-identity">' +
+            '<span class="scoreboard-avatar tone-' + playerIconTone(entry.id, entry.self) + '" aria-hidden="true"></span>' +
+            '<span class="scoreboard-player-copy"><strong class="scoreboard-player-name">' + escapeMarkup(name) + "</strong>" +
+              '<span class="scoreboard-badges">' + badges + "</span></span>" +
+          "</div>" +
+          '<div class="scoreboard-stat"><span class="scoreboard-stat-value"><span>HP</span><strong>' + health + " / " + healthMax + "</strong></span>" +
+            '<span class="scoreboard-meter"><span class="scoreboard-meter-fill" style="width:' + healthWidth + '%"></span></span></div>' +
+          '<div class="scoreboard-stat"><span class="scoreboard-stat-value"><span>Bag</span><strong>' + carried + " / " + capacity + "</strong></span>" +
+            '<span class="scoreboard-meter"><span class="scoreboard-meter-fill bag" style="width:' + bagWidth + '%"></span></span></div>' +
+        "</div>";
+      }).join("");
+    }
+
+    function openScoreboard() {
+      if (!multiplayer.connected || !multiplayer.started || scoreboardOpen) return;
+      scoreboardOpen = true;
+      scoreboardRenderKey = "";
+      ui.playerScoreboard.hidden = false;
+      renderScoreboard(true);
+    }
+
+    function closeScoreboard() {
+      if (!scoreboardOpen) return;
+      scoreboardOpen = false;
+      ui.playerScoreboard.hidden = true;
+    }
+
+    function updatePlayerName(value) {
+      const nextName = sanitizePlayerName(value);
+      if (!nextName) {
+        ui.playerNameInput.value = playerName;
+        return;
+      }
+      playerName = nextName;
+      ui.playerNameInput.value = playerName;
+      localStorage.setItem(PLAYER_NAME_KEY, playerName);
+      sendMultiplayer({ type: "player:update", player: localPlayerSnapshot() });
+      renderLobby();
+      renderScoreboard(true);
     }
 
     function multiplayerPlayerCount() {
@@ -207,18 +333,17 @@
     function renderLobby() {
       if (!lobbyOpen) return;
       const isHost = multiplayer.playerId === multiplayer.hostId;
-      const players = [{ id: multiplayer.playerId, self: true }].concat(
-        Array.from(multiplayer.players.keys()).map(function(id) { return { id: id, self: false }; })
-      );
+      const players = multiplayerPlayerEntries();
       ui.lobbyRoomLabel.textContent = multiplayer.room ? "Room " + multiplayer.room : "Village lobby";
       ui.lobbyStatusText.textContent = multiplayer.connected
         ? isHost
           ? "Your village is ready. Start when everyone has joined."
           : "Waiting for the host to begin the village."
         : "Connection to the host was closed.";
-      ui.lobbyPlayerList.innerHTML = players.map(function(entry, index) {
+      ui.lobbyPlayerList.innerHTML = players.map(function(entry) {
         const isHostPlayer = entry.id === multiplayer.hostId;
-        return '<div class="lobby-player"><span>' + (entry.self ? "You" : "Villager " + (index + 1)) + "</span>" +
+        const name = sanitizePlayerName(entry.state && entry.state.name) || "Villager";
+        return '<div class="lobby-player"><span>' + escapeMarkup(name) + (entry.self ? " (You)" : "") + "</span>" +
           '<span class="lobby-player-role">' + (isHostPlayer ? "Host" : "Ready") + "</span></div>";
       }).join("");
       ui.lobbyStartButton.hidden = !isHost;
@@ -252,6 +377,12 @@
       multiplayer.socket.send(JSON.stringify(message));
     }
 
+    function sendClockSync() {
+      if (!multiplayer.connected || multiplayer.playerId !== multiplayer.hostId) return;
+      multiplayer.clockSyncTimer = 0.25;
+      sendMultiplayer({ type: "clock:sync", clockState: sharedClockSnapshot() });
+    }
+
     function queueVillageSync() {
       if (!multiplayer.connected || multiplayer.villageSyncTimer) return;
       multiplayer.villageSyncTimer = window.setTimeout(function() {
@@ -278,6 +409,31 @@
       updateUI();
     }
 
+    function applySharedClockState(state, silent) {
+      if (!state) return;
+      const nextPhase = state.phase === "night" ? "night" : "day";
+      const phaseLength = nextPhase === "night" ? NIGHT_LENGTH : DAY_LENGTH;
+      const nextTime = clamp(Number(state.phaseTime) || 0, 0, phaseLength);
+      const nextDay = Math.max(1, Math.floor(Number(state.day) || progress.day));
+      const nextDemonFight = nextPhase === "night" && Boolean(state.demonFightActive);
+      const phaseChanged = phase !== nextPhase;
+      const demonFightChanged = demonFightActive !== nextDemonFight;
+
+      progress.day = nextDay;
+      multiplayer.clockRunning = Boolean(state.running);
+
+      if (phaseChanged) {
+        applyRemotePhaseTransition(nextPhase, nextDemonFight, Boolean(silent));
+      } else if (demonFightChanged) {
+        applyRemoteDemonFightState(nextDemonFight, Boolean(silent));
+      }
+
+      phase = nextPhase;
+      phaseTime = nextTime;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(progress));
+      updateUI();
+    }
+
     function receiveMultiplayerMessage(event) {
       let message;
       try {
@@ -297,6 +453,7 @@
           if (remotePlayer.id !== multiplayer.playerId) multiplayer.players.set(remotePlayer.id, remotePlayer.state);
         });
         applySharedVillageState(message.villageState);
+        applySharedClockState(message.clockState, true);
         updateMultiplayerUi();
         if (!multiplayer.started) openLobby();
       } else if (message.type === "player:joined" && message.player.id !== multiplayer.playerId) {
@@ -304,23 +461,33 @@
         multiplayer.hostId = message.hostId || multiplayer.hostId;
         multiplayer.started = Boolean(message.started);
         updateMultiplayerUi();
+        renderScoreboard(true);
         showMessage("Another villager has joined your village.", 2.8);
       } else if (message.type === "player:update" && message.id !== multiplayer.playerId) {
         multiplayer.players.set(message.id, message.player);
+        renderLobby();
+        renderScoreboard(false);
       } else if (message.type === "player:left") {
         multiplayer.players.delete(message.id);
         updateMultiplayerUi();
+        renderScoreboard(true);
         showMessage("A villager has left the village.", 2.4);
       } else if (message.type === "village:state") {
         applySharedVillageState(message.villageState);
+      } else if (message.type === "clock:state") {
+        applySharedClockState(message.clockState, false);
       } else if (message.type === "host:changed") {
         multiplayer.hostId = message.hostId;
+        applySharedClockState(message.clockState, true);
         updateMultiplayerUi();
+        if (multiplayer.playerId === multiplayer.hostId) sendClockSync();
       } else if (message.type === "game:started") {
         multiplayer.started = true;
         multiplayer.hostId = message.hostId || multiplayer.hostId;
+        applySharedClockState(message.clockState, true);
         if (lobbyOpen) closeLobby();
         updateMultiplayerUi();
+        if (multiplayer.playerId === multiplayer.hostId) sendClockSync();
         showMessage("The host has started the village.", 3);
       } else if (message.type === "error") {
         updateMultiplayerStatus(message.message || "Could not join this village.");
@@ -354,7 +521,8 @@
           type: "join",
           room: room,
           player: localPlayerSnapshot(),
-          villageState: sharedVillageSnapshot()
+          villageState: sharedVillageSnapshot(),
+          clockState: sharedClockSnapshot()
         }));
       });
       socket.addEventListener("message", receiveMultiplayerMessage);
@@ -362,6 +530,7 @@
         multiplayer.connected = false;
         multiplayer.connecting = false;
         multiplayer.players.clear();
+        closeScoreboard();
         updateMultiplayerStatus("Host connection closed");
       });
       socket.addEventListener("error", function() {
@@ -372,9 +541,14 @@
     function updateMultiplayer(dt) {
       if (!multiplayer.connected) return;
       multiplayer.playerUpdateTimer -= dt;
-      if (multiplayer.playerUpdateTimer > 0) return;
-      multiplayer.playerUpdateTimer = 0.08;
-      sendMultiplayer({ type: "player:update", player: localPlayerSnapshot() });
+      if (multiplayer.playerUpdateTimer <= 0) {
+        multiplayer.playerUpdateTimer = 0.08;
+        sendMultiplayer({ type: "player:update", player: localPlayerSnapshot() });
+      }
+
+      if (multiplayer.playerId !== multiplayer.hostId) return;
+      multiplayer.clockSyncTimer -= dt;
+      if (multiplayer.clockSyncTimer <= 0) sendClockSync();
     }
 
     async function copyInviteLink() {
@@ -1080,9 +1254,11 @@
       }
     }
 
-    function beginNight(demonBattle) {
+    function enterNightState(demonBattle, silent) {
       phase = "night";
       phaseTime = NIGHT_LENGTH;
+      monsters = [];
+      boss = null;
       enemySpawnTimer = 0;
       nightThreatStage = 0;
       nightHazardTimer = 3.5;
@@ -1090,6 +1266,11 @@
       demonFightActive = Boolean(demonBattle);
       demonResolvedTonight = false;
       demonProjectiles = [];
+      if (silent) {
+        if (demonBattle) spawnDemonGod();
+        return;
+      }
+
       sfx(demonBattle ? "demon" : "dusk");
 
       if (demonBattle) {
@@ -1098,6 +1279,64 @@
       } else {
         showMessage("Lanterns on. The village circle is safe until morning.", 3.6);
       }
+    }
+
+    function enterRemoteDayState(silent) {
+      const returnedHome = inVillage();
+      phase = "day";
+      phaseTime = DAY_LENGTH;
+      monsters = [];
+      boss = null;
+      demonProjectiles = [];
+      nightHazards = [];
+      demonFightActive = false;
+      demonResolvedTonight = false;
+      nightThreatStage = 0;
+      player.hp = maxHp();
+      if (returnedHome) {
+        player.x = VILLAGE.x;
+        player.y = VILLAGE.y + 15;
+        depositHeld(true);
+      }
+      replenishResources();
+      if (!silent) showMessage("A new golden morning. " + tributeReminderMessage(), 4.8);
+    }
+
+    function applyRemotePhaseTransition(nextPhase, nextDemonFight, silent) {
+      if (nextPhase === "night") {
+        enterNightState(nextDemonFight, silent);
+      } else {
+        enterRemoteDayState(silent);
+      }
+    }
+
+    function applyRemoteDemonFightState(active, silent) {
+      if (active) {
+        monsters = [];
+        boss = null;
+        demonProjectiles = [];
+        nightHazards = [];
+        demonFightActive = true;
+        demonResolvedTonight = false;
+        spawnDemonGod();
+        if (!silent) {
+          sfx("demon");
+          showMessage("The host refused the tribute. The Demon God descends.", 4.2);
+        }
+        return;
+      }
+
+      monsters = monsters.filter(function(monster) { return !monster.isDemon; });
+      boss = null;
+      demonProjectiles = [];
+      demonFightActive = false;
+      demonResolvedTonight = true;
+      if (!silent) showMessage("The Demon God has been driven away.", 3.6);
+    }
+
+    function beginNight(demonBattle) {
+      enterNightState(demonBattle, false);
+      sendClockSync();
     }
 
     function openTributeMenu() {
@@ -1169,6 +1408,7 @@
       }
       replenishResources();
       saveProgress();
+      sendClockSync();
 
       const dawn = survivedDemon
         ? "Dawn breaks. The Demon God has been driven away."
@@ -1214,10 +1454,13 @@
       boss = null;
       demonProjectiles = [];
       nightHazards = [];
-      phase = "day";
-      phaseTime = DAY_LENGTH;
-      progress.day += 1;
-      saveProgress();
+      if (isClockAuthority()) {
+        phase = "day";
+        phaseTime = DAY_LENGTH;
+        progress.day += 1;
+        saveProgress();
+        sendClockSync();
+      }
       const rescue = lost > 0
         ? "The wardens carried you home. Your bag spilled " + lost + " resources."
         : "The wardens found you and tucked you safely beside the hearth.";
@@ -1331,6 +1574,7 @@
       player.hp = Math.min(maxHp(), player.hp + 35 + demon.tier * 5);
       phaseTime = Math.min(phaseTime, 4);
       saveProgress();
+      sendClockSync();
       upgradeRenderKey = "";
       villageUpgradeRenderKey = "";
       sfx("victory");
@@ -1629,17 +1873,20 @@
       updateMonsters(dt);
       updateParticles(dt);
       updateCamera(dt);
-      if (!demonFightActive) phaseTime -= dt;
+      if (!demonFightActive && (isClockAuthority() || multiplayer.clockRunning)) {
+        phaseTime = Math.max(0, phaseTime - dt);
+      }
 
-      if (phase === "day" && phaseTime <= 0) {
-        startNight();
-      } else if (phase === "night") {
-        if (!demonFightActive && phaseTime <= 0) startDay();
+      if (isClockAuthority()) {
+        if (phase === "day" && phaseTime <= 0) {
+          startNight();
+        } else if (phase === "night") {
+          if (!demonFightActive && phaseTime <= 0) startDay();
+        }
       }
 
       replenishResources();
       updateContextHint();
-      updateMultiplayer(dt);
       updateUI();
     }
 
@@ -2694,6 +2941,7 @@
       renderUpgrades(false);
       renderVillageUpgrades(false);
       renderUpgradeTracker(false);
+      renderScoreboard(false);
     }
 
     function setPaused(value, message) {
@@ -2705,6 +2953,7 @@
       });
       ui.pauseButton.textContent = paused ? "Resume" : "Pause";
       if (message) showMessage(message, 2);
+      sendClockSync();
     }
 
     function openPauseMenu(message) {
@@ -2742,6 +2991,7 @@
     function frame(now) {
       const dt = Math.min(0.033, (now - lastTime) / 1000);
       lastTime = now;
+      updateMultiplayer(dt);
       update(dt);
       render();
       requestAnimationFrame(frame);
@@ -2750,6 +3000,11 @@
     window.addEventListener("keydown", function(event) {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
         event.preventDefault();
+      }
+      if (event.code === "Tab" && multiplayer.connected && multiplayer.started) {
+        event.preventDefault();
+        if (!event.repeat) openScoreboard();
+        return;
       }
       if (event.code === "Escape" && !tributeChoiceActive && !gameOver) {
         event.preventDefault();
@@ -2771,10 +3026,16 @@
     });
 
     window.addEventListener("keyup", function(event) {
+      if (event.code === "Tab") {
+        if (scoreboardOpen) event.preventDefault();
+        closeScoreboard();
+        return;
+      }
       keys.delete(event.code);
     });
 
     window.addEventListener("blur", function() {
+      closeScoreboard();
       if (!paused) openPauseMenu("Paused while you were away.");
     });
 
@@ -2804,6 +3065,13 @@
     ui.pauseButton.addEventListener("click", togglePaused);
     ui.resumeButton.addEventListener("click", closePauseMenu);
     ui.lobbyStartButton.addEventListener("click", startLobbyGame);
+    ui.playerNameInput.value = playerName;
+    ui.playerNameInput.addEventListener("change", function() {
+      updatePlayerName(ui.playerNameInput.value);
+    });
+    ui.playerNameInput.addEventListener("keydown", function(event) {
+      if (event.code === "Enter") ui.playerNameInput.blur();
+    });
 
     function toggleSound() {
       soundsEnabled = !soundsEnabled;
@@ -2866,6 +3134,7 @@
       cameraState.y = clamp(player.y - VIEW.height / 2, 0, WORLD.height - VIEW.height);
       replenishResources();
       saveProgress();
+      sendClockSync();
       upgradeRenderKey = "";
       villageUpgradeRenderKey = "";
       tributeRenderKey = "";

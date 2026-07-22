@@ -86,10 +86,12 @@ Unsigned test executables can trigger Windows reputation warnings. Only distribu
 - Up to four players per room
 - A pre-game lobby with a host-only **Start game** action
 - Other players are visible in the world and their movement is synchronized
+- Players can choose a lobby name and hold **Tab** in-game to see party health and bag status
 - Village materials, upgrades, workers, and tribute progress are shared
+- The host keeps every player's day/night clock synchronized, including late joiners
 - The invite button copies the current room URL
 
-Enemies, resource nodes, combat, and the live day/night simulation still run locally on each client. Moving those systems into the host's authoritative simulation is the next step toward complete co-op play.
+Enemies, resource nodes, and combat still run locally on each client. Moving those systems into the host's authoritative simulation is the next step toward complete co-op play.
 
 ## Licensing
 
